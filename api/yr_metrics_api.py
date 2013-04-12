@@ -28,6 +28,32 @@ def jsonDefaultHandler(obj):
         return str(obj)
         #raise TypeError, 'Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj))
 
+def castDatum(datum):
+	if "." in datum:
+		# This could be a float or a string...
+		try:
+			ret_datum = float(datum)
+		except ValueError, e:
+			ret_datum = unicode(datum)
+	else:
+		# This could be an int or a string...
+		try:
+			ret_datum = int(datum)
+		except ValueError, e:
+			ret_datum = unicode(datum)
+
+	return ret_datum
+
+
+def toList(cursor, key = None):
+	returnList = []
+	for item in cursor:
+		if key == None:
+			returnList.append(item)
+		else:
+			returnList.append(item[key])
+	return returnList
+
 
 # Mongo Schema
 @db.register
@@ -61,7 +87,7 @@ class Event(RootDocument):
 
 # http://127.0.0.1:5000/event/add?realm=ADP&description=Shoutcast%20Server&name=CURRENTLISTENERS&datum=17
 @app.route("/event/<func>", methods=["GET"])
-def yr_metrics_event(func):
+def yr_metrics_add_or_touch_event(func):
 	error = None
 	current_event = db.Event()
 	current_event["realm"] = unicode(request.args.get('realm'))
@@ -72,21 +98,7 @@ def yr_metrics_event(func):
 	current_event["dt"] = datetime.datetime.utcnow()
 
 	# Need to test for whether or not the data is a string, a float, or an int
-	datum = None
-	if "." in request.args.get('datum'):
-		# This could be a float or a string...
-		try:
-			datum = float(request.args.get('datum'))
-		except ValueError, e:
-			datum = unicode(request.args.get('datum'))
-	else:
-		# This could be an int or a string...
-		try:
-			datum = int(request.args.get('datum'))
-		except ValueError, e:
-			datum = unicode(request.args.get('datum'))
-
-	current_event["datum"] = datum
+	current_event["datum"] = castDatum(request.args.get('datum'))
 
 	if func.upper() == "ADD":
 
@@ -131,6 +143,115 @@ def yr_metrics_event(func):
 		}
 
 		return json.dumps(responseDict, default=jsonDefaultHandler)
+
+
+@app.route("/adp/<metric>", methods=["GET"])
+@app.route("/ADP/<metric>", methods=["GET"])
+@app.route("/adp/<metric>/", methods=["GET"])
+@app.route("/ADP/<metric>/", methods=["GET"])
+@app.route("/adp/<metric>/<modifier>", methods=["GET"])
+@app.route("/ADP/<metric>/<modifier>", methods=["GET"])
+@app.route("/adp/<metric>/<modifier>/", methods=["GET"])
+@app.route("/ADP/<metric>/<modifier>/", methods=["GET"])
+def adp_metrics(metric, modifier = "None"):
+	error = None
+	result = None
+	realm = "ADP"
+	descriptions = ["128K Shoutcast Server", "56K Shoutcast Server"]
+
+	# Do just the simple find()s in the database that return a single
+	# integer as a response.
+	if metric.upper() == "NUMSESSIONS":
+
+		result = {}
+		total = 0
+		
+		for desc in descriptions:
+			result[desc] = db.Event.find({"realm": realm, 
+										  "description": desc,
+										  "name": "Listener"}).count()
+			total += result[desc]
+
+		result["Total"] = total
+
+	elif metric.upper() == "NUMBOUNCED":
+
+		result = {}
+		total = 0
+		
+		for desc in descriptions:
+			result[desc] = db.Event.find({"realm": realm, 
+										  "description": desc,
+										  "name": "Listener",
+										  "dtm": None}).count()
+			total += result[desc]
+
+		result["Total"] = total
+
+	elif metric.upper() == "CURRENTLISTENERS":
+
+		result = {}
+		total = 0
+		
+		if modifier.upper() == "LAST30MINS":
+
+			for desc in descriptions:
+				result[desc] = toList(db.Event.find({"realm": realm,
+													 "description": desc,
+													 "name": "Current Listeners"},
+													{"_id": False,
+													 "datum": True},
+													sort = [("_id", -1)]).limit(30),
+									  "datum")
+
+		else:
+
+			for desc in descriptions:
+				result[desc] = db.Event.find_one({"realm": realm, 
+												  "description": desc,
+												  "name": "Current Listeners"},
+												 sort = [("_id", -1)])["datum"]
+				total += result[desc]
+
+			result["Total"] = total
+
+	elif metric.upper() == "NUMUNIQUELISTENERS":
+
+		result = {}
+		total = 0
+
+		for desc in descriptions:
+			result[desc] = len(db.Event.find({"realm": realm, 
+											  "description": desc,
+											  "name": "Listener"}).distinct("datum"))
+			total += result[desc]
+
+		result["Total"] = total
+
+	elif metric.upper() == "NUMSONGSPLAYED":
+
+		constraint = {"realm": realm, "name": "Current Song"}
+		result = db.Event.find(constraint).count()
+
+	elif metric.upper() == "SONGS":
+
+		result = []
+		lim = 10 if request.args.get('limit') == None else int(request.args.get('limit'))
+
+		if modifier.upper() == "LASTPLAYED":
+			for song in db.Event.find({"realm": realm,
+									   "name": "Current Song"}, 
+									  {"_id": False, 
+									   "datum": True},
+									  sort = [("_id", -1)]).limit(lim):
+				result.append(song["datum"])
+
+
+
+
+	return json.dumps({"Result": result}, default=jsonDefaultHandler)
+
+
 
 
 if __name__ == "__main__":
