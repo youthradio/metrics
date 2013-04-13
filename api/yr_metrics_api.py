@@ -227,11 +227,18 @@ def adp_metrics(metric, modifier = "None"):
 	elif metric.upper() == "SONGS":
 
 		result = []
+
+		commercials = ["AllDayPlay.fm - AllDayPlay.fm", 
+					   "AllDayPlay.FM : AllDayPLay.FM - AllDayPlay.FM : AllDayPLay.FM"]
+
+		constraint = {"realm": realm,
+					  "name": "Current Song",
+					  "datum": {"$nin": commercials}}
+
 		lim = 10 if request.args.get('limit') == None else int(request.args.get('limit'))
 
 		if modifier.upper() == "LASTPLAYED":
-			for song in db.Event.find({"realm": realm,
-									   "name": "Current Song"}, 
+			for song in db.Event.find(constraint, 
 									  {"_id": False, 
 									   "datum": True},
 									  sort = [("_id", -1)]).limit(lim):
@@ -239,7 +246,6 @@ def adp_metrics(metric, modifier = "None"):
 
 		elif modifier.upper() == "TOTALPLAYED":
 
-			constraint = {"realm": realm, "name": "Current Song"}
 			result = db.Event.find(constraint).count()
 
 	elif metric.upper() == "LISTENERHOURS":
