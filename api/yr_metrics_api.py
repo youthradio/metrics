@@ -5,14 +5,9 @@ import re
 import json
 
 
-# Configuration
-DEBUG = True
-MONGODB_HOST = "localhost"
-MONGODB_PORT = 27017
-
 # Create the application object
 app = Flask(__name__)
-app.config.from_object(__name__)
+app.config.from_pyfile('yr_metrics_api.cfg', silent=False)
 
 # Connect to the database
 db = Connection(app.config["MONGODB_HOST"], app.config["MONGODB_PORT"])
@@ -223,15 +218,11 @@ def adp_metrics(metric, modifier = "None"):
 		for desc in descriptions:
 			result[desc] = len(db.Event.find({"realm": realm, 
 											  "description": desc,
-											  "name": "Listener"}).distinct("datum"))
+											  "name": "Listener",
+											  "dtm": { "$ne": None } }).distinct("datum"))
 			total += result[desc]
 
 		result["Total"] = total
-
-	elif metric.upper() == "NUMSONGSPLAYED":
-
-		constraint = {"realm": realm, "name": "Current Song"}
-		result = db.Event.find(constraint).count()
 
 	elif metric.upper() == "SONGS":
 
@@ -246,7 +237,28 @@ def adp_metrics(metric, modifier = "None"):
 									  sort = [("_id", -1)]).limit(lim):
 				result.append(song["datum"])
 
+		elif modifier.upper() == "TOTALPLAYED":
 
+			constraint = {"realm": realm, "name": "Current Song"}
+			result = db.Event.find(constraint).count()
+
+	elif metric.upper() == "LISTENERHOURS":
+
+		result = {}
+		temp = {}
+		total = 0.0
+
+		for desc in descriptions:
+			temp = db["yr-metrics"].Events.aggregate([
+				{ "$match" : { "realm" : u"ADP", "description" : desc, "name" : u"Listener", "dtm" : { "$ne" : None } } },
+				{ "$project" : { "datum" : 1, "dt" : 1, "dtm" : 1, "listeningTimeInSeconds" : { "$divide" : [{ "$subtract" : ["$dtm", "$dt"] }, 1000] } } },
+				{ "$group": { "_id" : None, "totalListeningTimeInSeconds" : { "$sum" : "$listeningTimeInSeconds" } } }
+			])
+
+			result[desc] = temp["result"][0]["totalListeningTimeInSeconds"] / 60 / 60 if temp["ok"] == 1 else "Error"
+			total += result[desc] if result[desc] != "Error" else 0
+
+		result["Total"] = total
 
 
 	return json.dumps({"Result": result}, default=jsonDefaultHandler)
