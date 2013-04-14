@@ -244,6 +244,49 @@ def adp_metrics(metric, modifier = "None"):
 													sort = [("_id", 1)]),
 									  "datum")
 
+		elif "BETWEEN" in modifier.upper():
+
+			try:
+				time_re = re.search("BETWEEN(\d+-\d+-\d+T\d+:\d+:\d+)AND(\d+-\d+-\d+T\d+:\d+:\d+)", modifier.upper())
+				start_time = datetime.datetime.strptime(time_re.group(1), '%Y-%m-%dT%H:%M:%S')
+				end_time = datetime.datetime.strptime(time_re.group(2), '%Y-%m-%dT%H:%M:%S')
+
+				for desc in descriptions:
+					result[desc] = toList(db.Event.find({"realm": realm,
+														 "description": desc,
+														 "name": "Current Listeners",
+														 "dt": {"$gte": start_time, "$lte": end_time} },
+														{"_id": False,
+														 "datum": True},
+														sort = [("dt", 1)]),
+										  "datum")
+
+			except AttributeError:
+				result = "AttributeError"
+
+		elif modifier.upper() == "AVGLISTENINGTIME":
+
+			total = 0.0
+
+			# Get the individual average listening time...
+			for desc in descriptions:
+				temp = db["yr-metrics"].Events.aggregate([
+					{ "$match" : { "realm" : u"ADP", "description" : desc, "name" : u"Listener", "dtm" : { "$ne" : None } } },
+					{ "$project" : { "datum" : 1, "dt" : 1, "dtm" : 1, "listeningTimeInSeconds" : { "$divide" : [{ "$subtract" : ["$dtm", "$dt"] }, 1000] } } },
+					{ "$group": { "_id" : None, "avgListeningTimeInSeconds" : { "$avg" : "$listeningTimeInSeconds" } } }
+				])
+
+				result[desc] = temp["result"][0]["avgListeningTimeInSeconds"] / 60 if temp["ok"] == 1 else "Error"
+
+			# Get the overall average listening time...
+			temp = db["yr-metrics"].Events.aggregate([
+				{ "$match" : { "realm" : u"ADP", "description" : { "$in" : descriptions }, "name" : u"Listener", "dtm" : { "$ne" : None } } },
+				{ "$project" : { "datum" : 1, "dt" : 1, "dtm" : 1, "listeningTimeInSeconds" : { "$divide" : [{ "$subtract" : ["$dtm", "$dt"] }, 1000] } } },
+				{ "$group": { "_id" : None, "avgListeningTimeInSeconds" : { "$avg" : "$listeningTimeInSeconds" } } }
+			])
+
+			result["Overall"] = temp["result"][0]["avgListeningTimeInSeconds"] / 60 if temp["ok"] == 1 else "Error"
+
 
 	elif metric.upper() == "LISTENER":
 
