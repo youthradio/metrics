@@ -156,77 +156,10 @@ def adp_metrics(metric, modifier = "None"):
 
 	# Do just the simple find()s in the database that return a single
 	# integer as a response.
-	if metric.upper() == "NUMSESSIONS":
+
+	if metric.upper() == "SONGS":
 
 		result = {}
-		total = 0
-		
-		for desc in descriptions:
-			result[desc] = db.Event.find({"realm": realm, 
-										  "description": desc,
-										  "name": "Listener"}).count()
-			total += result[desc]
-
-		result["Total"] = total
-
-	elif metric.upper() == "NUMBOUNCED":
-
-		result = {}
-		total = 0
-		
-		for desc in descriptions:
-			result[desc] = db.Event.find({"realm": realm, 
-										  "description": desc,
-										  "name": "Listener",
-										  "dtm": None}).count()
-			total += result[desc]
-
-		result["Total"] = total
-
-	elif metric.upper() == "CURRENTLISTENERS":
-
-		result = {}
-		total = 0
-		
-		if modifier.upper() == "LAST30MINS":
-
-			for desc in descriptions:
-				result[desc] = toList(db.Event.find({"realm": realm,
-													 "description": desc,
-													 "name": "Current Listeners"},
-													{"_id": False,
-													 "datum": True},
-													sort = [("_id", -1)]).limit(30),
-									  "datum")
-
-		else:
-
-			for desc in descriptions:
-				result[desc] = db.Event.find_one({"realm": realm, 
-												  "description": desc,
-												  "name": "Current Listeners"},
-												 sort = [("_id", -1)])["datum"]
-				total += result[desc]
-
-			result["Total"] = total
-
-	elif metric.upper() == "NUMUNIQUELISTENERS":
-
-		result = {}
-		total = 0
-
-		for desc in descriptions:
-			result[desc] = len(db.Event.find({"realm": realm, 
-											  "description": desc,
-											  "name": "Listener",
-											  "dtm": { "$ne": None } }).distinct("datum"))
-			total += result[desc]
-
-		result["Total"] = total
-
-	elif metric.upper() == "SONGS":
-
-		result = []
 
 		commercials = ["AllDayPlay.fm - AllDayPlay.fm", 
 					   "AllDayPlay.FM : AllDayPLay.FM - AllDayPlay.FM : AllDayPLay.FM"]
@@ -237,35 +170,113 @@ def adp_metrics(metric, modifier = "None"):
 
 		lim = 10 if request.args.get('limit') == None else int(request.args.get('limit'))
 
-		if modifier.upper() == "LASTPLAYED":
+		if modifier.upper() == "PLAYED":
+
+			result = []
+
 			for song in db.Event.find(constraint, 
 									  {"_id": False, 
 									   "datum": True},
 									  sort = [("_id", -1)]).limit(lim):
 				result.append(song["datum"])
 
-		elif modifier.upper() == "TOTALPLAYED":
+		elif modifier.upper() == "TOTAL":
 
 			result = db.Event.find(constraint).count()
 
-	elif metric.upper() == "LISTENERHOURS":
+	elif metric.upper() == "SESSIONS":
+
+		result = {}
+		total = 0
+
+		if modifier.upper() == "CURRENT":
+
+			for desc in descriptions:
+				result[desc] = db.Event.find_one({"realm": realm, 
+												  "description": desc,
+												  "name": "Current Listeners"},
+												 sort = [("_id", -1)])["datum"]
+				total += result[desc]
+
+			result["Total"] = total
+
+		elif modifier.upper() == "BOUNCED":
+
+			for desc in descriptions:
+				result[desc] = db.Event.find({"realm": realm, 
+											  "description": desc,
+											  "name": "Listener",
+											  "dtm": None}).count()
+				total += result[desc]
+
+			result["Total"] = total
+
+		elif modifier.upper() == "TOTAL":
+
+			for desc in descriptions:
+				result[desc] = db.Event.find({"realm": realm, 
+											  "description": desc,
+											  "name": "Listener"}).count()
+				total += result[desc]
+
+			result["Total"] = total
+
+		elif "LAST" in modifier.upper():
+
+			# Set up the regular expression...
+			try:
+				time_re = re.search("(\d+)(MINS|HOURS|DAYS|YEARS)", modifier.upper())
+				time_delta = int(time_re.group(1))
+			except AttributeError:
+				time_delta = 30
+
+			# Let's put together the time delta...
+			delta = datetime.timedelta(minutes=time_delta)
+			current_time = datetime.datetime.utcnow()
+
+			for desc in descriptions:
+				result[desc] = toList(db.Event.find({"realm": realm,
+													 "description": desc,
+													 "name": "Current Listeners",
+													 "dt": {"$gte": (current_time - delta), "$lte": current_time} },
+													{"_id": False,
+													 "datum": True},
+													sort = [("_id", 1)]),
+									  "datum")
+
+
+	elif metric.upper() == "LISTENER":
 
 		result = {}
 		temp = {}
-		total = 0.0
+		total = 0
 
-		for desc in descriptions:
-			temp = db["yr-metrics"].Events.aggregate([
-				{ "$match" : { "realm" : u"ADP", "description" : desc, "name" : u"Listener", "dtm" : { "$ne" : None } } },
-				{ "$project" : { "datum" : 1, "dt" : 1, "dtm" : 1, "listeningTimeInSeconds" : { "$divide" : [{ "$subtract" : ["$dtm", "$dt"] }, 1000] } } },
-				{ "$group": { "_id" : None, "totalListeningTimeInSeconds" : { "$sum" : "$listeningTimeInSeconds" } } }
-			])
+		if modifier.upper() == "HOURS":
 
-			result[desc] = temp["result"][0]["totalListeningTimeInSeconds"] / 60 / 60 if temp["ok"] == 1 else "Error"
-			total += result[desc] if result[desc] != "Error" else 0
+			total = 0.0
 
-		result["Total"] = total
+			for desc in descriptions:
+				temp = db["yr-metrics"].Events.aggregate([
+					{ "$match" : { "realm" : u"ADP", "description" : desc, "name" : u"Listener", "dtm" : { "$ne" : None } } },
+					{ "$project" : { "datum" : 1, "dt" : 1, "dtm" : 1, "listeningTimeInSeconds" : { "$divide" : [{ "$subtract" : ["$dtm", "$dt"] }, 1000] } } },
+					{ "$group": { "_id" : None, "totalListeningTimeInSeconds" : { "$sum" : "$listeningTimeInSeconds" } } }
+				])
 
+				result[desc] = temp["result"][0]["totalListeningTimeInSeconds"] / 60 / 60 if temp["ok"] == 1 else "Error"
+				total += result[desc] if result[desc] != "Error" else 0
+
+			result["Total"] = total
+
+		elif modifier.upper() == "TOTAL":
+
+			for desc in descriptions:
+				result[desc] = len(db.Event.find({"realm": realm, 
+												  "description": desc,
+												  "name": "Listener",
+												  "dtm": { "$ne": None } }).distinct("datum"))
+				total += result[desc]
+
+			result["Total"] = total
 
 	return json.dumps({"Result": result}, default=jsonDefaultHandler)
 
