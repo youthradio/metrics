@@ -225,15 +225,28 @@ def adp_metrics(metric, modifier = "None"):
 
 			# Set up the regular expression...
 			try:
-				time_re = re.search("(\d+)(MINS|HOURS|DAYS|YEARS)", modifier.upper())
+				time_re = re.search("(\d+)(MINS|HOURS|DAYS|WEEKS|YEARS)", modifier.upper())
 				time_delta = int(time_re.group(1))
+
+				# Let's put together the time delta...
+				if time_re.group(2) == "MINS":
+					delta = datetime.timedelta(minutes=time_delta)
+				elif time_re.group(2) == "HOURS":
+					delta = datetime.timedelta(hours=time_delta)
+				elif time_re.group(2) == "DAYS":
+					delta = datetime.timedelta(days=time_delta)
+				elif time_re.group(2) == "WEEKS":
+					delta = datetime.timedelta(days=time_delta)
+				elif time_re.group(2) == "YEARS":
+					delta = datetime.timedelta(years=time_delta)
 			except AttributeError:
 				time_delta = 30
+				delta = datetime.timedelta(minutes=time_delta)
 
-			# Let's put together the time delta...
-			delta = datetime.timedelta(minutes=time_delta)
+			# Set the current time...
 			current_time = datetime.datetime.utcnow()
 
+			# Run the database query...
 			for desc in descriptions:
 				result[desc] = toList(db.Event.find({"realm": realm,
 													 "description": desc,
