@@ -1,5 +1,7 @@
 from flask import *
 from mongokit import Connection, Document, IS, OR
+from dateutil.relativedelta import relativedelta
+
 import datetime
 import re
 import json
@@ -223,39 +225,99 @@ def adp_metrics(metric, modifier = "None"):
 
 		elif "LAST" in modifier.upper():
 
-			# Set up the regular expression...
-			try:
-				time_re = re.search("(\d+)(MINS|HOURS|DAYS|WEEKS|YEARS)", modifier.upper())
-				time_delta = int(time_re.group(1))
-
-				# Let's put together the time delta...
-				if time_re.group(2) == "MINS":
-					delta = datetime.timedelta(minutes=time_delta)
-				elif time_re.group(2) == "HOURS":
-					delta = datetime.timedelta(hours=time_delta)
-				elif time_re.group(2) == "DAYS":
-					delta = datetime.timedelta(days=time_delta)
-				elif time_re.group(2) == "WEEKS":
-					delta = datetime.timedelta(days=time_delta)
-				elif time_re.group(2) == "YEARS":
-					delta = datetime.timedelta(years=time_delta)
-			except AttributeError:
-				time_delta = 30
-				delta = datetime.timedelta(minutes=time_delta)
-
 			# Set the current time...
 			current_time = datetime.datetime.utcnow()
+			time_measure = None
+
+			# Perform a regular expression on the URL...
+			try:
+				time_re = re.search("(\d+)(MINS|HOURS|DAYS|WEEKS|MONTHS|YEARS)", modifier.upper())
+				time_delta = int(time_re.group(1))
+				time_measure = time_re.group(2) 
+
+			except AttributeError:
+				time_delta = 30
+				time_measure = "MINS"
+
+			# Let's put together the time delta...
+			if time_measure == "MINS":
+				delta = datetime.timedelta(minutes=time_delta)
+				date_list = [ current_time - datetime.timedelta(minutes=x) for x in range(0, time_delta) ]
+			elif time_measure == "HOURS":
+				delta = datetime.timedelta(hours=time_delta)
+				date_list = [ current_time - datetime.timedelta(hours=x, 
+																minutes=current_time.minute, 
+																seconds=current_time.second) for x in range(0, time_delta) ]
+			elif time_measure == "DAYS":
+				delta = datetime.timedelta(days=time_delta)
+				date_list = [ current_time - datetime.timedelta(days=x,
+																hours=current_time.hour,
+																minutes=current_time.minute,
+																seconds=current_time.second) for x in range(0, time_delta) ]
+			elif time_measure == "WEEKS":
+				delta = datetime.timedelta(weeks=time_delta)
+				date_list = [ current_time - datetime.timedelta(weeks=x,
+																hours=current_time.hour,
+																minutes=current_time.minute,
+																seconds=current_time.second) for x in range(0, time_delta) ]
+			elif time_measure == "YEARS":
+				delta = datetime.timedelta(days=365*time_delta)
+				date_list = [ current_time - datetime.timedelta(days=x) for x in range(0, time_delta, 365) ]
+
+
+			# Set the list of datetimes...
+			date_list.reverse()
+			result["date_list"] = list(date_list)
+			temp = {}
 
 			# Run the database query...
 			for desc in descriptions:
-				result[desc] = toList(db.Event.find({"realm": realm,
-													 "description": desc,
-													 "name": "Current Listeners",
-													 "dt": {"$gte": (current_time - delta), "$lte": current_time} },
-													{"_id": False,
-													 "datum": True},
-													sort = [("_id", 1)]),
-									  "datum")
+				if time_measure == "MINS":
+					result[desc] = toList(db.Event.find({"realm": realm,
+														 "description": desc,
+														 "name": "Current Listeners",
+														 "dt": {"$gte": (current_time - delta), "$lte": current_time} },
+														{"_id": False,
+														 "datum": True},
+														sort = [("_id", 1)]),
+										  "datum")
+				else:
+
+					listeners = db.Event.find({ "realm": realm, 
+												"description": desc, 
+												"name": "Listener",
+												"dtm": { "$gte": (current_time - delta) } }, 
+											  { "_id": False,
+												"dt": True,
+												"dtm": True },
+											  sort = [("_id", 1)])
+
+					# Go through the query results and compile the results...
+					temp = {}
+					for key in date_list:
+						dates = (key, key + relativedelta(hours=+1))
+
+						for x in range(0, listeners.count()):
+
+							# Start time is before the current hour and the end time is after the current hour.
+							if listeners[x]["dt"] <= dates[0] and dates[0] < listeners[x]["dtm"]:
+								temp[dates[0]] = temp[dates[0]] + 1 if dates[0] in temp else 1
+
+							# Start time is during this hour.
+							elif listeners[x]["dt"] >= dates[0] and listeners[x]["dt"] < dates[1]:
+								temp[dates[0]] = temp[dates[0]] + 1 if dates[0] in temp else 1
+
+							# End time is during this hour.
+							elif listeners[x]["dtm"] >= dates[0] and listeners[x]["dtm"] < dates[1]:
+								temp[dates[0]] = temp[dates[0]] + 1 if dates[0] in temp else 1
+					
+					# Sort the resulting list and return it.
+					l = list()
+					for a in date_list:
+						l.append(temp[a])
+
+					result[desc] = list(l)
+
 
 		elif "BETWEEN" in modifier.upper():
 
