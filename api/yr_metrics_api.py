@@ -2,6 +2,8 @@ from flask import *
 from mongokit import Connection, Document, IS, OR
 from dateutil.relativedelta import relativedelta
 
+import time
+
 import datetime
 import re
 import json
@@ -224,12 +226,14 @@ def adp_metrics(metric, modifier = "None"):
 			result["Total"] = total
 
 		elif "LAST" in modifier.upper():
+			result["time"] = {}
 
 			# Set the current time...
 			current_time = datetime.datetime.utcnow()
 			time_measure = None
 
 			# Perform a regular expression on the URL...
+			start_time = time.time()
 			try:
 				time_re = re.search("(\d+)(MINS|HOURS|DAYS|WEEKS|MONTHS|YEARS)", modifier.upper())
 				time_delta = int(time_re.group(1))
@@ -266,12 +270,20 @@ def adp_metrics(metric, modifier = "None"):
 
 
 			# Set the list of datetimes...
+			end_time = time.time()
+
+			result["time"]["regex and range"] = end_time - start_time
+
+			start_time = time.time()
 			date_list.reverse()
 			result["date_list"] = list(date_list)
 			temp = {}
+			end_time = time.time()
+			result["time"]["date reversal"] = end_time - start_time
 
 			# Run the database query...
 			for desc in descriptions:
+				start_time = time.time()
 				if time_measure == "MINS":
 					result[desc] = toList(db.Event.find({"realm": realm,
 														 "description": desc,
@@ -281,22 +293,36 @@ def adp_metrics(metric, modifier = "None"):
 														 "datum": True},
 														sort = [("_id", 1)]),
 										  "datum")
+					end_time = time.time()
+					result["time"][time_measure.lower() + " query - " + desc] = end_time - start_time
 				else:
 
 					listeners = db.Event.find({ "realm": realm, 
-												"description": desc, 
-												"name": "Listener",
-												"dtm": { "$gte": (current_time - delta) } }, 
-											  { "_id": False,
-												"dt": True,
-												"dtm": True },
-											  sort = [("_id", 1)])
+																	"description": desc, 
+																	"name": "Listener",
+																	"dtm": { "$gte": (current_time - delta) } }, 
+																  { "_id": False,
+																	"dt": True,
+																	"dtm": True },
+																  sort = [("_id", 1)])
+					end_time = time.time()
+					result["time"][time_measure.lower() + " query - " + desc] = end_time - start_time
 
 					# Go through the query results and compile the results...
 					temp = {}
+					start_time = time.time()
 					for key in date_list:
-						dates = (key, key + relativedelta(hours=+1))
 
+						if time_measure == "HOURS":
+							dates = (key, key + relativedelta(hours=+1))
+						elif time_measure == "DAYS":
+							dates = (key, key + relativedelta(days=+1))
+						elif time_measure == "WEEKS":
+							dates = (key, key + relativedelta(weeks=+1))
+						elif time_measure == "YEARS":
+							dates = (key, key + relativedelta(years=+1))
+
+						start_time_a = time.time()
 						for x in range(0, listeners.count()):
 
 							# Start time is before the current hour and the end time is after the current hour.
@@ -310,13 +336,20 @@ def adp_metrics(metric, modifier = "None"):
 							# End time is during this hour.
 							elif listeners[x]["dtm"] >= dates[0] and listeners[x]["dtm"] < dates[1]:
 								temp[dates[0]] = temp[dates[0]] + 1 if dates[0] in temp else 1
+						end_time_a = time.time()
+						result["time"]["listeners iter - " + desc] = end_time_a - start_time_a
+					end_time = time.time()
+					result["time"]["compile results (outer) - " + desc] = end_time - start_time
 					
 					# Sort the resulting list and return it.
+					start_time = time.time()
 					l = list()
 					for a in date_list:
 						l.append(temp[a])
 
-					result[desc] = list(l)
+					result[desc] = l
+					end_time = time.time()
+					result["time"]["organize results list - " + desc] = end_time - start_time
 
 
 		elif "BETWEEN" in modifier.upper():
