@@ -226,6 +226,40 @@ def adp_metrics(metric, modifier = "None"):
 			result["Total"] = total
 
 		elif "LAST" in modifier.upper():
+			""" Return information from a previous time to the present.
+
+			This function will perform basic analysis on the information
+			returned. It's to be used in the following format:
+
+			http://<server url>/ADP/SESSIONS/LAST4HOURS/
+			http://<server url>/ADP/SESSIONS/LAST30MINS/
+			http://<server url>/ADP/SESSIONS/LAST7DAYS/
+
+			The information returned will be in the following format:
+
+			{
+			  "Result" : {
+			    "date_list" : [
+			      "2013-04-18T20:00:00.284568",
+			      "2013-04-18T21:00:00.284568",
+			      "2013-04-18T22:00:00.284568",
+			      "2013-04-18T23:00:00.284568"
+			    ],
+			    "128K Shoutcast Server" : [
+			      33,
+			      10,
+			      21,
+			      8
+			    ],
+			    "56K Shoutcast Server" : [
+			      37,
+			      8,
+			      11,
+			      6
+			    ]
+			  }
+			}
+			"""
 			result["time"] = {}
 
 			# Set the current time...
@@ -264,16 +298,11 @@ def adp_metrics(metric, modifier = "None"):
 																hours=current_time.hour,
 																minutes=current_time.minute,
 																seconds=current_time.second) for x in range(0, time_delta) ]
-			elif time_measure == "YEARS":
-				delta = datetime.timedelta(days=365*time_delta)
-				date_list = [ current_time - datetime.timedelta(days=x) for x in range(0, time_delta, 365) ]
 
-
-			# Set the list of datetimes...
 			end_time = time.time()
-
 			result["time"]["regex and range"] = end_time - start_time
 
+			# Set the list of datetimes...
 			start_time = time.time()
 			date_list.reverse()
 			result["date_list"] = list(date_list)
@@ -318,26 +347,28 @@ def adp_metrics(metric, modifier = "None"):
 						elif time_measure == "DAYS":
 							dates = (key, key + relativedelta(days=+1))
 						elif time_measure == "WEEKS":
-							dates = (key, key + relativedelta(weeks=+1))
+							dates = (key, key + relativedelta(months=+1))
+						elif time_measure == "MONTHS":
+							dates = (key, key + relativedelta(days=+1))
 						elif time_measure == "YEARS":
 							dates = (key, key + relativedelta(years=+1))
 
 						start_time_a = time.time()
-						for x in range(0, listeners.count()):
+						temp[dates[0]] = db.Event.find(
+											{ "realm": realm, 
+											  "description": desc, 
+											  "name": "Listener",
+											  "dtm": { "$ne": None },
+											  "$or": [
+											  	{ "$and": [ { "dt": { "$lte": dates[0] } }, { "dtm": { "$gt": dates[0] } } ] },
+											  	{ "$and": [ { "dt": { "$gte": dates[0] } }, { "dt": { "$lt": dates[1] } } ] },
+											  	{ "$and": [ { "dtm": { "$gte": dates[0] } }, { "dtm": { "$lt": dates[1] } } ] }
+											  ] }
+										 ).count()
 
-							# Start time is before the current hour and the end time is after the current hour.
-							if listeners[x]["dt"] <= dates[0] and dates[0] < listeners[x]["dtm"]:
-								temp[dates[0]] = temp[dates[0]] + 1 if dates[0] in temp else 1
-
-							# Start time is during this hour.
-							elif listeners[x]["dt"] >= dates[0] and listeners[x]["dt"] < dates[1]:
-								temp[dates[0]] = temp[dates[0]] + 1 if dates[0] in temp else 1
-
-							# End time is during this hour.
-							elif listeners[x]["dtm"] >= dates[0] and listeners[x]["dtm"] < dates[1]:
-								temp[dates[0]] = temp[dates[0]] + 1 if dates[0] in temp else 1
 						end_time_a = time.time()
 						result["time"]["listeners iter - " + desc] = end_time_a - start_time_a
+
 					end_time = time.time()
 					result["time"]["compile results (outer) - " + desc] = end_time - start_time
 					
