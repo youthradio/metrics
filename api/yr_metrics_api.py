@@ -202,6 +202,9 @@ def adp_metrics(metric, modifier = "None"):
 												 sort = [("_id", -1)])["datum"]
 				total += result[desc]
 
+			result["Date"] = db.Event.find_one({"realm": realm, 
+												"name": "Current Listeners"},
+											   sort = [("_id", -1)])["dt"]
 			result["Total"] = total
 
 		elif modifier.upper() == "BOUNCED":
