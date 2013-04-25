@@ -296,11 +296,20 @@ def adp_metrics(metric, modifier = "None"):
 												   seconds=current_time.second) for x in range(0, time_delta) ]
 			elif time_measure == "DAYS":
 				delta = datetime.timedelta(days=time_delta)
-				date_list = [ current_time + tz.utcoffset(current_time) -
+				
+				# Set up the range for the search depending on time zone differentials.
+				# Need to compare the seconds in the timedeltas to make sure that the current
+				# time is within the offset.
+				if datetime.timedelta(hours=current_time.hour).seconds < tz.utcoffset(current_time).seconds:
+					date_range = range(1, time_delta + 1)
+				else:
+					date_range = range(0, time_delta)
+
+				date_list = [ current_time - tz.utcoffset(current_time) -
 								datetime.timedelta(days=x,
 												   hours=current_time.hour,
 												   minutes=current_time.minute,
-												   seconds=current_time.second) for x in range(0, time_delta) ]
+												   seconds=current_time.second) for x in date_range ]
 			elif time_measure == "WEEKS":
 				delta = datetime.timedelta(weeks=time_delta)
 				date_list = [ current_time + tz.utcoffset(current_time) -
