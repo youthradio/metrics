@@ -2,9 +2,8 @@ from flask import *
 from mongokit import Connection, Document, IS, OR
 from dateutil.relativedelta import relativedelta
 
-import time
-
-import datetime, pytz
+import datetime, pytz, time
+import math
 import re
 import json
 
@@ -300,7 +299,7 @@ def adp_metrics(metric, modifier = "None"):
 				# Set up the range for the search depending on time zone differentials.
 				# Need to compare the seconds in the timedeltas to make sure that the current
 				# time is within the offset.
-				if datetime.timedelta(hours=current_time.hour).seconds < tz.utcoffset(current_time).seconds:
+				if datetime.timedelta(hours=current_time.hour).seconds < math.fabs((tz.utcoffset(current_time).days * 24 * 60 * 60) + tz.utcoffset(current_time).seconds):
 					date_range = range(1, time_delta + 1)
 				else:
 					date_range = range(0, time_delta)
