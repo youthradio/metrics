@@ -4,7 +4,7 @@ from dateutil.relativedelta import relativedelta
 
 import time
 
-import datetime
+import datetime, pytz
 import re
 import json
 
@@ -265,8 +265,11 @@ def adp_metrics(metric, modifier = "None"):
 			"""
 			result["time"] = {}
 
+			# If there's a timezone out there, set it appropriately...
+			tz = pytz.timezone('US/Pacific') if not request.args.get('tz') else pytz.timezone(request.args.get('tz'))
+
 			# Set the current time...
-			current_time = datetime.datetime.utcnow()
+			current_time = datetime.datetime.utcnow().replace(microsecond=0)
 			time_measure = None
 
 			# Perform a regular expression on the URL...
@@ -283,24 +286,28 @@ def adp_metrics(metric, modifier = "None"):
 			# Let's put together the time delta...
 			if time_measure == "MINS":
 				delta = datetime.timedelta(minutes=time_delta)
-				date_list = [ current_time - datetime.timedelta(minutes=x) for x in range(0, time_delta) ]
+				date_list = [ current_time - 
+								datetime.timedelta(minutes=x) for x in range(0, time_delta) ]
 			elif time_measure == "HOURS":
 				delta = datetime.timedelta(hours=time_delta)
-				date_list = [ current_time - datetime.timedelta(hours=x, 
-																minutes=current_time.minute, 
-																seconds=current_time.second) for x in range(0, time_delta) ]
+				date_list = [ current_time - 
+								datetime.timedelta(hours=x, 
+												   minutes=current_time.minute, 
+												   seconds=current_time.second) for x in range(0, time_delta) ]
 			elif time_measure == "DAYS":
 				delta = datetime.timedelta(days=time_delta)
-				date_list = [ current_time - datetime.timedelta(days=x,
-																hours=current_time.hour,
-																minutes=current_time.minute,
-																seconds=current_time.second) for x in range(0, time_delta) ]
+				date_list = [ current_time + tz.utcoffset(current_time) -
+								datetime.timedelta(days=x,
+												   hours=current_time.hour,
+												   minutes=current_time.minute,
+												   seconds=current_time.second) for x in range(0, time_delta) ]
 			elif time_measure == "WEEKS":
 				delta = datetime.timedelta(weeks=time_delta)
-				date_list = [ current_time - datetime.timedelta(weeks=x,
-																hours=current_time.hour,
-																minutes=current_time.minute,
-																seconds=current_time.second) for x in range(0, time_delta) ]
+				date_list = [ current_time + tz.utcoffset(current_time) -
+								datetime.timedelta(weeks=x,
+												   hours=current_time.hour,
+												   minutes=current_time.minute,
+												   seconds=current_time.second) for x in range(0, time_delta) ]
 
 			end_time = time.time()
 			result["time"]["regex and range"] = end_time - start_time
