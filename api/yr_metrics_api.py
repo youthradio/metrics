@@ -119,7 +119,10 @@ def yr_metrics_add_or_touch_event(func):
 				"datum": current_event["datum"],
 				"$or": [
 					{"dtm": {"$gte": datetime.datetime.utcnow() - datetime.timedelta(minutes = 5)}},
-					{"dtm": None}
+					{"$and": [
+						{"dtm": None},
+						{"dt": {"$gte": datetime.datetime.utcnow() - datetime.timedelta(minutes = 5)}}
+					]}
 				]
 			},
 			sort = [("_id", -1)]
