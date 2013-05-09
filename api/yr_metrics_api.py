@@ -57,7 +57,7 @@ def toList(cursor, key = None):
 @db.register
 class RootDocument(Document):
 	"""Foundation class for MongoKit usage."""
-	use_dot_notation = True 
+	use_dot_notation = True
 	use_autorefs = True
 	skip_validation = False
 	structure = {}
@@ -75,7 +75,7 @@ class Event(RootDocument):
 		"source": unicode,					# IP Address or other source for event
 		"useragent": unicode,				# User Agent info on source
 		"dt": datetime.datetime,			# The datetime the event was recorded
-		"dtm": datetime.datetime			# The datetime the event recording ended 
+		"dtm": datetime.datetime			# The datetime the event recording ended
 	}
 	required_fields = ["realm", "description", "datum"]
 
@@ -110,13 +110,16 @@ def yr_metrics_add_or_touch_event(func):
 		return json.dumps(responseDict, default=jsonDefaultHandler)
 
 	elif func.upper() == "TOUCH":
-
 		# Touch changes the last modified date for a record in the database.
 		# If the record doesn't exist, it will insert the record.
 		query_response = list(db.Event.find(
 			spec = {
+        "realm": current_event["realm"],
+        "description": current_event["description"],
 				"name": current_event["name"],
 				"datum": current_event["datum"],
+        "source": current_event["source"],
+        "useragent": current_event["useragent"],
 				"$or": [
 					{"dtm": {"$gte": datetime.datetime.utcnow() - datetime.timedelta(minutes = 5)}},
 					{"$and": [
@@ -167,7 +170,7 @@ def adp_metrics(metric, modifier = "None"):
 
 		result = {}
 
-		commercials = ["AllDayPlay.fm - AllDayPlay.fm", 
+		commercials = ["AllDayPlay.fm - AllDayPlay.fm",
 					   "AllDayPlay.FM : AllDayPLay.FM - AllDayPlay.FM : AllDayPLay.FM"]
 
 		constraint = {"realm": realm,
@@ -180,8 +183,8 @@ def adp_metrics(metric, modifier = "None"):
 
 			result = []
 
-			for song in db.Event.find(constraint, 
-									  {"_id": False, 
+			for song in db.Event.find(constraint,
+									  {"_id": False,
 									   "datum": True},
 									  sort = [("_id", -1)]).limit(lim):
 				result.append(song["datum"])
@@ -198,13 +201,13 @@ def adp_metrics(metric, modifier = "None"):
 		if modifier.upper() == "CURRENT":
 
 			for desc in descriptions:
-				result[desc] = db.Event.find_one({"realm": realm, 
+				result[desc] = db.Event.find_one({"realm": realm,
 												  "description": desc,
 												  "name": "Current Listeners"},
 												 sort = [("_id", -1)])["datum"]
 				total += result[desc]
 
-			result["Date"] = db.Event.find_one({"realm": realm, 
+			result["Date"] = db.Event.find_one({"realm": realm,
 												"name": "Current Listeners"},
 											   sort = [("_id", -1)])["dt"]
 			result["Total"] = total
@@ -212,7 +215,7 @@ def adp_metrics(metric, modifier = "None"):
 		elif modifier.upper() == "BOUNCED":
 
 			for desc in descriptions:
-				result[desc] = db.Event.find({"realm": realm, 
+				result[desc] = db.Event.find({"realm": realm,
 											  "description": desc,
 											  "name": "Listener",
 											  "dtm": None}).count()
@@ -223,7 +226,7 @@ def adp_metrics(metric, modifier = "None"):
 		elif modifier.upper() == "TOTAL":
 
 			for desc in descriptions:
-				result[desc] = db.Event.find({"realm": realm, 
+				result[desc] = db.Event.find({"realm": realm,
 											  "description": desc,
 											  "name": "Listener"}).count()
 				total += result[desc]
@@ -279,7 +282,7 @@ def adp_metrics(metric, modifier = "None"):
 			try:
 				time_re = re.search("(\d+)(MINS|HOURS|DAYS|WEEKS|MONTHS|YEARS)", modifier.upper())
 				time_delta = int(time_re.group(1))
-				time_measure = time_re.group(2) 
+				time_measure = time_re.group(2)
 
 			except AttributeError:
 				time_delta = 30
@@ -288,17 +291,17 @@ def adp_metrics(metric, modifier = "None"):
 			# Let's put together the time delta...
 			if time_measure == "MINS":
 				delta = datetime.timedelta(minutes=time_delta)
-				date_list = [ current_time - 
+				date_list = [ current_time -
 								datetime.timedelta(minutes=x) for x in range(0, time_delta) ]
 			elif time_measure == "HOURS":
 				delta = datetime.timedelta(hours=time_delta)
-				date_list = [ current_time - 
-								datetime.timedelta(hours=x, 
-												   minutes=current_time.minute, 
+				date_list = [ current_time -
+								datetime.timedelta(hours=x,
+												   minutes=current_time.minute,
 												   seconds=current_time.second) for x in range(0, time_delta) ]
 			elif time_measure == "DAYS":
 				delta = datetime.timedelta(days=time_delta)
-				
+
 				# Set up the range for the search depending on time zone differentials.
 				# Need to compare the seconds in the timedeltas to make sure that the current
 				# time is within the offset.
@@ -347,10 +350,10 @@ def adp_metrics(metric, modifier = "None"):
 					result["time"][time_measure.lower() + " query - " + desc] = end_time - start_time
 				else:
 
-					listeners = db.Event.find({ "realm": realm, 
-																	"description": desc, 
+					listeners = db.Event.find({ "realm": realm,
+																	"description": desc,
 																	"name": "Listener",
-																	"dtm": { "$gte": (current_time - delta) } }, 
+																	"dtm": { "$gte": (current_time - delta) } },
 																  { "_id": False,
 																	"dt": True,
 																	"dtm": True },
@@ -376,8 +379,8 @@ def adp_metrics(metric, modifier = "None"):
 
 						start_time_a = time.time()
 						temp[dates[0]] = db.Event.find(
-											{ "realm": realm, 
-											  "description": desc, 
+											{ "realm": realm,
+											  "description": desc,
 											  "name": "Listener",
 											  "dtm": { "$ne": None },
 											  "$or": [
@@ -392,7 +395,7 @@ def adp_metrics(metric, modifier = "None"):
 
 					end_time = time.time()
 					result["time"]["compile results (outer) - " + desc] = end_time - start_time
-					
+
 					# Sort the resulting list and return it.
 					start_time = time.time()
 					l = list()
@@ -473,7 +476,7 @@ def adp_metrics(metric, modifier = "None"):
 		elif modifier.upper() == "TOTAL":
 
 			for desc in descriptions:
-				result[desc] = len(db.Event.find({"realm": realm, 
+				result[desc] = len(db.Event.find({"realm": realm,
 												  "description": desc,
 												  "name": "Listener",
 												  "dtm": { "$ne": None } }).distinct("datum"))
