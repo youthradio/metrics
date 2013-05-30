@@ -168,7 +168,7 @@ class AllDayPlay(object):
 
         # Get the overall average listening time...
         temp = db["yr-metrics"].Events.aggregate([
-            { "$match" : { "realm" : u"ADP", "description" : { "$in" : descriptions }, "name" : u"Listener", "dtm" : { "$ne" : None } } },
+            { "$match" : { "realm" : u"ADP", "description" : { "$in" : DESCRIPTIONS }, "name" : u"Listener", "dtm" : { "$ne" : None } } },
             { "$project" : { "datum" : 1, "dt" : 1, "dtm" : 1, "listeningTimeInSeconds" : { "$divide" : [{ "$subtract" : ["$dtm", "$dt"] }, 1000] } } },
             { "$group": { "_id" : None, "avgListeningTimeInSeconds" : { "$avg" : "$listeningTimeInSeconds" } } }
         ])

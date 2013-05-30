@@ -39,7 +39,7 @@ app.add_url_rule('/adp/sessions/bounced', 'adp_total_sessions_bounced', adp.tota
 app.add_url_rule('/adp/sessions/total', 'adp_total_sessions', adp.totalSessions, methods=["GET"])
 app.add_url_rule('/adp/listener/hours', 'adp_total_listener_hours', adp.totalListenerHours, methods=["GET"])
 app.add_url_rule('/adp/listener/total', 'adp_total_listeners', adp.totalListeners, methods=["GET"])
-app.add_url_rule('/adp/sessions/avglisteningtime', 'adp_average_session_listening_time', adp.totalListeners, methods=["GET"])
+app.add_url_rule('/adp/sessions/avglisteningtime', 'adp_average_session_listening_time', adp.averageListeningTime, methods=["GET"])
 app.add_url_rule('/adp/sessions/last<modifier>', 'adp_last_X', lambda modifier: adp.lastX(modifier), methods=["GET"])
 
 # Run the app.
