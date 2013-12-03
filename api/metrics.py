@@ -16,15 +16,16 @@ class Metrics(object):
 
         if func.upper() in ['ADD', 'TOUCH']:
             current_event = db.Event()
-            current_event["realm"] = unicode(request.args.get('realm'))
-            current_event["description"] = unicode(request.args.get('description'))
-            current_event["name"] = unicode(request.args.get('name'))
-            current_event["source"] = unicode(request.args.get('source'))
-            current_event["useragent"] = unicode(request.args.get('useragent'))
+            current_event["realm"] = unicode(request.form['realm'] if 'realm' in request.form else request.args.get('realm'))
+            current_event["description"] = unicode(request.form['description'] if 'description' in request.form else request.args.get('description'))
+            current_event["name"] = unicode(request.form['name'] if 'name' in request.form else request.args.get('name'))
+            current_event["source"] = unicode(request.form['source'] if 'source' in request.form else request.args.get('source'))
+            current_event["useragent"] = unicode(request.form['source'] if 'useragent' in request.form else request.args.get('useragent'))
             current_event["dt"] = datetime.datetime.utcnow()
 
             # Need to test for whether or not the data is a string, a float, or an int
-            current_event["datum"] = castDatum(request.args.get('datum'))
+            datum = request.form['datum'] if 'datum' in request.form else request.args.get('datum')
+            current_event["datum"] = castDatum(datum)
 
         if func.upper() == "ADD":
 

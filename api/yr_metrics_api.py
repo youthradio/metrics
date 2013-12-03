@@ -29,7 +29,7 @@ db.register(mdb.Event)
 db.register(mdb.Count)
 
 # Add an event to the logging table.
-app.add_url_rule('/event/<func>', 'event_add_or_touch', lambda func: metrics.addOrTouchEvent(func), methods=["GET"])
+app.add_url_rule('/event/<func>', 'event_add_or_touch', lambda func: metrics.addOrTouchEvent(func), methods=["GET", "POST"])
 
 # AllDayPlay Metrics.
 app.add_url_rule('/adp/songs/played', 'adp_last_songs_played', adp.lastSongsPlayed, methods=["GET"])

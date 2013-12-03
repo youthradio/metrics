@@ -40,6 +40,8 @@ class AllDayPlay(object):
                                   {"_id": False,
                                    "datum": True},
                                   sort = [("_id", -1)]).limit(lim):
+            # Replace the comma's with HTML character code entity
+            song["datum"] = song["datum"].replace(",", "&#44;")
             result.append(song["datum"])
 
         return json.dumps({"Result": result}, default=jsonDefaultHandler)
